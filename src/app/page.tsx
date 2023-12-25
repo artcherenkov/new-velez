@@ -1,17 +1,21 @@
 import React, { Suspense } from "react";
 
+import { Main } from "@/components/Main";
 import { Map } from "@/components/Map";
-import { TestComponent } from "@/components/TestComponent";
-import { YMapsProvider } from "@/components/YMapsProvider";
+import { TestSlowComponent } from "@/components/TestSlowComponent";
 
-
-export default function Home() {
+export default async function Home() {
   return (
     <main>
-      <TestComponent />
-      <Suspense fallback="loading...">
-        <YMapsProvider />
-      </Suspense>
+      <Main map={<Map />}>
+        <Suspense fallback="Loading...">
+          <TestSlowComponent timeout={3000} />
+        </Suspense>
+
+        <Suspense fallback="Loading...">
+          <TestSlowComponent timeout={5000} />
+        </Suspense>
+      </Main>
     </main>
   );
 }

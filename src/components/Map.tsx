@@ -1,61 +1,81 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import ReactDOM from "react-dom";
 import Script from "next/script";
 
-import { IYMapModules } from "@/types";
+import { sleep } from "@/utils/sleep";
 
+/**
+ * Проблема находится в этой функции. Если запустить приложение не меняя код,
+ * то все сработает как надо: оба Suspense'a начнут работу и, до окончания их работы в консоли
+ * выведется "wtf someAnotherFunc done", а соответствующая строка на странице тоже примет это значение.
+ * Если раскоментить хотя бы одну строку (например, "await window.ymaps3.ready"),
+ * то сразу же будет заметно, что текст в консоли появится только после того, как отработают ВСЕ
+ * Suspense, то есть код будет ждать, пока отрабатает TestSlowComponent с наибольшим таймаутом.
+ *
+ * Я пробовал решить проблему как угодно: убирал и добавлял директивы "use client", передавал компонент Map
+ * через пропсы в Main, передавал Map просто через children и даже рендерил напрямую в page.tsx; создавал другие асинхронные функции,
+ * чтобы смоделировать поведение функции getYmapsModules, но всегда все было нормально. Даже добавил в глобальный объект window
+ * асинхронную функцию sayHi, но и это не помогло воспроизвести поведение, происходящее при вызове функций из пакета ymaps. Причем не важно,
+ * какую именно функцию вызывать – баг воспроизводится и с window.ymaps3.import("@yandex/ymaps3-reactify"), и с window.ymaps3.ready
+ */
 const getYmapsModules = async () => {
-  await window.ymaps3.ready;
-  const ymaps3React = await window.ymaps3.import("@yandex/ymaps3-reactify");
 
-  const reactify = ymaps3React.reactify.bindTo(React, ReactDOM);
+  const result = await window.sayHi()
 
-  const YMapZoomControlModule = await ymaps3.import(
-    "@yandex/ymaps3-controls@0.0.1",
-  );
-  const YMapDefaultMarkerModule = await ymaps3.import(
-    "@yandex/ymaps3-markers@0.0.1",
-  );
+  console.log(result)
+  // await window.ymaps3.ready;
+  // const ymaps3React = await window.ymaps3.import("@yandex/ymaps3-reactify");
+
+  // const reactify = ymaps3React.reactify.bindTo(React, ReactDOM);
+
+  // return {
+  //   YMap: reactify.module(ymaps3).YMap,
+  //   YMapDefaultSchemeLayer: reactify.module(ymaps3).YMapDefaultSchemeLayer,
+  // };
 
   return {
-    YMap: reactify.module(ymaps3).YMap,
-    YMapDefaultSchemeLayer: reactify.module(ymaps3).YMapDefaultSchemeLayer,
-    YMapControls: reactify.module(ymaps3).YMapControls,
-    YMapDefaultFeaturesLayer: reactify.module(ymaps3).YMapDefaultFeaturesLayer,
-    YMapZoomControl: reactify.module(YMapZoomControlModule).YMapZoomControl,
-    YMapDefaultMarker: reactify.module(YMapDefaultMarkerModule)
-      .YMapDefaultMarker,
-    YMapMarker: reactify.module(ymaps3).YMapMarker,
-    YMapFeature: reactify.module(ymaps3).YMapFeature,
-    YMapListener: reactify.module(ymaps3).YMapListener,
+    foo: "bar",
+    baz: "qux"
   };
 };
 
-export const Map = ({ js }: { js: string }) => {
-  const [modules, setModules] = useState<IYMapModules | null>();
+const someAnotherFunc = async () => {
+  await sleep(100);
+  return "wtf someAnotherFunc done";
+};
 
-  useEffect(() => {
-    const processYmapsModules = async () => {
-      const modules = await getYmapsModules();
-      setModules(modules);
-    };
+const someFunc = async () => {
+  return await someAnotherFunc();
+};
 
-    processYmapsModules();
-  }, []);
+window.sayHi = async () => {
+  await sleep(1000)
+  return "hi world"
+}
+
+export const Map = () => {
+  const [string, setString] = useState("none");
+  const [modules, setModules] = useState<any>(null);
+
+  const onScriptLoad = async () => {
+
+    const string = await someFunc();
+    const modules = await getYmapsModules();
+    setModules(modules);
+    setString(string);
+    console.log(string);
+  };
 
   return (
-    <div>
-      <Script id="ymaps-code">{js}</Script>
-      <h2>there is map</h2>
-      <div id="map" style={{ width: 300, height: 300 }}>
-        {modules && (
-          <modules.YMap location={{ center: [37.588144, 55.733842], zoom: 10 }}>
-            <modules.YMapDefaultSchemeLayer />
-          </modules.YMap>
-        )}
-      </div>
-    </div>
+    <>
+      <h2>{string}</h2>
+      <Script
+        id="ymaps-code"
+        src="https://velez-trip.ru/api/load-ymaps"
+        onLoad={onScriptLoad}
+      />
+    </>
   );
 };
